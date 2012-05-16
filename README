@@ -1,0 +1,7 @@
+http://web.engr.oregonstate.edu/~mjb/cs475/Projects/proj07.html
+
+functional decomposition with pthreads
+computations synchronized with barriers
+
+
+barriars are optional in posix and not implemented on osx.
