@@ -8,9 +8,9 @@
 #include <math.h>
 
 #include <pthread.h>
-#define THREADS 3
+#define THREADS 4
 
-const float GRAIN_GROWS_PER_MONTH =		8.0; // inches
+const float GRAIN_GROWS_PER_MONTH =		9.0; // inches
 const float ONE_DEER_EATS_PER_MONTH =		0.5;
 
 const float AVG_PRECIP_PER_MONTH =		6.0; // inches
@@ -30,6 +30,7 @@ int	NowMonth;		// 0 - 11
 float	NowPrecip;		// inches of rain per month
 float	NowTemp;		// temperature this month
 float	NowHeight;		// grain height in inches
+int NowBlood;
 int	NowNumDeer;
 
 pthread_barrier_t done_computing_barr;
@@ -44,8 +45,8 @@ int		Ranf( int, int );
 
 void *grain_growth(void *t) {
     int rc;
-   float tempFactor;  
-   float precipFactor; 
+    float tempFactor;  
+    float precipFactor; 
     while (true) {
         // do calculations
         precipFactor = exp(-1* pow(((float)(NowPrecip-MIDPRECIP)/10),2));
@@ -74,7 +75,7 @@ void *grain_growth(void *t) {
         }
     }
 }
- 
+
 void *grain_deer(void *t) {
     int rc;
     int temp_num_deer;
@@ -93,12 +94,35 @@ void *grain_deer(void *t) {
         }
         // assign to global variable
         NowNumDeer = temp_num_deer;
-        rc = pthread_barrier_wait(&done_assigning_barr); 
         if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD) {
+            rc = pthread_barrier_wait(&done_assigning_barr); 
             printf("Could not wait on barrier\n");
             exit(-1);
         }
         rc = pthread_barrier_wait(&done_printing_barr); 
+        if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD) {
+            printf("Could not wait on barrier\n");
+            exit(-1);
+        }
+    }
+}
+
+void *grain_blood(void *t) {
+    int rc;
+    while (true) {
+        rc = pthread_barrier_wait(&done_computing_barr); 
+        if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD) {
+            printf("Could not wait on barrier\n");
+            exit(-1);
+        }
+        // 1 in 15 chance of Exodus 7:14-25 
+        if(Ranf(0,15) > 14) NowBlood = 4; // 3 days of blood
+
+        if(NowBlood == 1) NowNumDeer--; // a deer dies
+        if(NowBlood > 1) NowPrecip = 0; // rains blood, not water 
+        if(NowBlood > 0) NowBlood--;
+                        
+        rc = pthread_barrier_wait(&done_assigning_barr); 
         if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD) {
             printf("Could not wait on barrier\n");
             exit(-1);
@@ -115,7 +139,7 @@ void *watcher(void *t) {
             printf("Could not wait on barrier\n");
             exit(-1);
         }
-        printf("%d\t%f\t%f\t%f\t%d\n", numMonths, NowPrecip, NowTemp, NowHeight, NowNumDeer);
+        printf("%d\t%f\t%f\t%f\t%d\t%d\n", numMonths, NowPrecip, NowTemp, NowHeight, NowNumDeer, NowBlood);
         // increment time passed
         numMonths++;
         if(NowMonth < 12) NowMonth++;
@@ -154,7 +178,6 @@ int main () {
     NowHeight =  1.;
     NowMonth =    0;
     NowYear  = 2012;
-
     void *status;
 
     pthread_t threads[THREADS];
@@ -164,8 +187,8 @@ int main () {
     }
     pthread_mutex_init(&calc, NULL);
     pthread_barrier_init(&done_computing_barr, NULL, THREADS-1);
-    pthread_barrier_init(&done_assigning_barr, NULL, THREADS);
-    pthread_barrier_init(&done_printing_barr, NULL, THREADS);
+    pthread_barrier_init(&done_assigning_barr, NULL, THREADS-1);
+    pthread_barrier_init(&done_printing_barr, NULL, THREADS-1);
     /* For portability, explicitly create threads in a joinable state */
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
@@ -174,14 +197,13 @@ int main () {
 
     pthread_create(&threads[0], &attr, grain_growth, (void *) thread_ids[0]);
     pthread_create(&threads[1], &attr, grain_deer, (void *) thread_ids[1]);
-    pthread_create(&threads[2], &attr, watcher, (void *) thread_ids[2]);
+    pthread_create(&threads[2], &attr, grain_blood, (void *) thread_ids[2]);
+    pthread_create(&threads[3], &attr, watcher, (void *) thread_ids[3]);
 
-    pthread_join(threads[2], &status); // join watcher thread
-    printf("pthread exit");
+    pthread_join(threads[3], &status); // join watcher thread
     pthread_cancel(threads[0]);
     pthread_cancel(threads[1]);
-
-    printf("pthread exit");
+    pthread_cancel(threads[2]);
 
     pthread_attr_destroy(&attr);
     //pthread_exit(NULL);

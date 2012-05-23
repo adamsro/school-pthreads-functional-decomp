@@ -1,7 +1,7 @@
 all: main.o #pdf
 
 main.o:	main.cpp 
-		g++ -Wall -o main main.cpp -fopenmp -lm -lpthread
+		g++ -Wall -ggdb -o main main.cpp -fopenmp -lm -lpthread
 
 clean:
 	rm -rf *o 
