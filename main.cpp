@@ -118,8 +118,11 @@ void *grain_blood(void *t) {
         // 1 in 15 chance of Exodus 7:14-25 
         if(Ranf(0,15) > 14) NowBlood = 4; // 3 days of blood
 
-        if(NowBlood == 1) NowNumDeer--; // a deer dies
-        if(NowBlood > 1) NowPrecip = 0; // rains blood, not water 
+        if(NowBlood > 1) {
+            NowNumDeer -= Ranf(0,3); // up to 3 deer die.
+            if (NowNumDeer < 0) NowNumDeer = 0;
+            NowPrecip = 0; // rains blood, not water 
+        }
         if(NowBlood > 0) NowBlood--;
                         
         rc = pthread_barrier_wait(&done_assigning_barr); 
