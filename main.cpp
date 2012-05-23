@@ -136,13 +136,15 @@ void *grain_blood(void *t) {
 void *watcher(void *t) {
     int rc;
     int numMonths = 0;
+    float celsius;
     while (NowYear < 2018) {
         rc = pthread_barrier_wait(&done_assigning_barr);
         if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD) {
             printf("Could not wait on barrier\n");
             exit(-1);
         }
-        printf("%d\t%f\t%f\t%f\t%d\t%d\n", numMonths, NowPrecip, NowTemp, NowHeight, NowNumDeer, NowBlood);
+        celsius = (5.f/9.f) * (NowTemp - 32);
+        printf("%d\t%f\t%f\t%f\t%d\t%d\n", numMonths, NowPrecip, celsius, NowHeight, NowNumDeer, NowBlood);
         // increment time passed
         numMonths++;
         if(NowMonth < 12) NowMonth++;

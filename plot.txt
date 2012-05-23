@@ -1,4 +1,4 @@
-set term epslatex size 7.5,3.5
+set term epslatex size 7,3.5
 set output "graph1.eps"
 set xlabel "months since January 2012"
 #set ylabel "MFLOPS/sec" #offset -5.0, 0.0
@@ -11,9 +11,9 @@ set key outside top
 #set nokey
 #set yrange [80:150]
 
-plot 'o_precip.out' title 'precipitation' lc rgb '#471EFF' lt 1 lw 1.5, \
-         'o_temp.out' title 'temperature' lc rgb '#1EFFB7' lt 1 lw 1.5, \
-         'o_height.out' title 'height' lc rgb '#FF1E65' lt 1 lw 1.5, \
+plot 'o_precip.out' title 'precipitation, in.' lc rgb '#471EFF' lt 1 lw 1.5, \
+         'o_temp.out' title 'temperature, celsuis' lc rgb '#1EFFB7' lt 1 lw 1.5, \
+         'o_height.out' title 'height, in.' lc rgb '#FF1E65' lt 1 lw 1.5, \
          'o_deer.out' title '\# of deer' lc rgb '#B0D318' lt 1 lw  1.5, \
          'o_blood.out' title 'days of blood rain' lc rgb '#5B5B5B' lt 1 lw 1.5
 
