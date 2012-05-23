@@ -36,62 +36,69 @@ pthread_barrier_t done_computing_barr;
 pthread_barrier_t done_assigning_barr;
 pthread_barrier_t done_printing_barr;
 pthread_attr_t attr;
+pthread_mutex_t calc;
 
 void calc_temp_percipitation(void);
 float		Ranf( float, float );
 int		Ranf( int, int );
 
 void *grain_growth(void *t) {
+    int rc;
    float tempFactor;  
    float precipFactor; 
     while (true) {
         // do calculations
-        tempFactor = exp(-1* pow(((NowTemp-MIDTEMP)/10),2));
-        precipFactor = exp(-1* pow(((NowPrecip-MIDPRECIP)/10),2));
-        int rc = pthread_barrier_wait(&done_computing_barr);
+        precipFactor = exp(-1* pow(((float)(NowPrecip-MIDPRECIP)/10),2));
+        tempFactor = exp(-1* pow(((float)(NowTemp-MIDTEMP)/10),2));
+
+        rc = pthread_barrier_wait(&done_computing_barr);
         if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD) {
             printf("Could not wait on barrier\n");
             exit(-1);
         }
         // assign to global variable
-        NowHeight += tempFactor * precipFactor * GRAIN_GROWS_PER_MONTH;
+        //printf("%f\t%f\t\n", precipFactor, tempFactor); // for debugging
+        NowHeight = tempFactor * precipFactor * GRAIN_GROWS_PER_MONTH;
         NowHeight -= (float)NowNumDeer * ONE_DEER_EATS_PER_MONTH; 
-        int rc = pthread_barrier_wait(&done_assigning_barr); 
+        if(NowHeight < 0) NowHeight = 0;
+
+        rc = pthread_barrier_wait(&done_assigning_barr); 
         if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD) {
             printf("Could not wait on barrier\n");
             exit(-1);
         }
-        int rc = pthread_barrier_wait(&done_printing_barr); 
+        rc = pthread_barrier_wait(&done_printing_barr); 
         if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD) {
             printf("Could not wait on barrier\n");
             exit(-1);
         }
     }
 }
-
+ 
 void *grain_deer(void *t) {
+    int rc;
     int temp_num_deer;
     while (true) {
         // do calculations
         temp_num_deer = NowNumDeer; 
         if(NowHeight > temp_num_deer ) {
             temp_num_deer++;
-        }else if( NowHeight < temp_num_deer && NowHeight > 0) {
+        } else if( NowHeight < temp_num_deer) {
             temp_num_deer--;
         } 
-        int rc = pthread_barrier_wait(&done_computing_barr); 
+        rc = pthread_barrier_wait(&done_computing_barr); 
         if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD) {
             printf("Could not wait on barrier\n");
             exit(-1);
         }
         // assign to global variable
         NowNumDeer = temp_num_deer;
-        int rc = pthread_barrier_wait(&done_assigning_barr); 
+        rc = pthread_barrier_wait(&done_assigning_barr); 
         if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD) {
             printf("Could not wait on barrier\n");
             exit(-1);
         }
-        int rc = pthread_barrier_wait(&done_printing_barr); 
+        rc = pthread_barrier_wait(&done_printing_barr); 
         if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD) {
             printf("Could not wait on barrier\n");
             exit(-1);
@@ -100,14 +107,15 @@ void *grain_deer(void *t) {
 }
 
 void *watcher(void *t) {
+    int rc;
     int numMonths = 0;
     while (NowYear < 2018) {
-        int rc = pthread_barrier_wait(&done_assigning_barr);
+        rc = pthread_barrier_wait(&done_assigning_barr);
         if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD) {
             printf("Could not wait on barrier\n");
             exit(-1);
         }
-        printf("%d\t%f\t%f\t%f\t%d\t", numMonths, NowPrecip, NowTemp, NowHeight, NowNumDeer);
+        printf("%d\t%f\t%f\t%f\t%d\n", numMonths, NowPrecip, NowTemp, NowHeight, NowNumDeer);
         // increment time passed
         numMonths++;
         if(NowMonth < 12) NowMonth++;
@@ -123,32 +131,38 @@ void *watcher(void *t) {
             exit(-1);
         }
     }
-    pthread_exit(NULL);
+    pthread_exit((void*) t);
 }
 
 void calc_temp_percipitation() {
+    pthread_mutex_lock(&calc);
     float ang = (  30.*(float)NowMonth + 15.  ) * ( M_PI / 180. );
     float temp = AVG_TEMP - AMP_TEMP * cos( ang );
     NowTemp = temp + Ranf( -RANDOM_TEMP, RANDOM_TEMP );
 
     float precip = AVG_PRECIP_PER_MONTH + AMP_PRECIP_PER_MONTH * sin( ang );
     NowPrecip = precip + Ranf( -RANDOM_PRECIP, RANDOM_PRECIP );
+    //printf("precip %f, now_precip %f\n", precip, NowPrecip); // for debugging
     if( NowPrecip < 0. )
         NowPrecip = 0.;
+    //printf("precip %d, now_precip %d", precip, NowPrecip);
+    pthread_mutex_unlock(&calc);
 }
 
 int main () {
     NowNumDeer = 1;
     NowHeight =  1.;
-
     NowMonth =    0;
     NowYear  = 2012;
+
+    void *status;
 
     pthread_t threads[THREADS];
     long thread_ids[THREADS];
     for(int i = 0; i < THREADS; ++i) {
         thread_ids[i] = i;
     }
+    pthread_mutex_init(&calc, NULL);
     pthread_barrier_init(&done_computing_barr, NULL, THREADS-1);
     pthread_barrier_init(&done_assigning_barr, NULL, THREADS);
     pthread_barrier_init(&done_printing_barr, NULL, THREADS);
@@ -162,25 +176,26 @@ int main () {
     pthread_create(&threads[1], &attr, grain_deer, (void *) thread_ids[1]);
     pthread_create(&threads[2], &attr, watcher, (void *) thread_ids[2]);
 
-    pthread_join(threads[2], NULL); // join watcher thread
+    pthread_join(threads[2], &status); // join watcher thread
+    printf("pthread exit");
     pthread_cancel(threads[0]);
     pthread_cancel(threads[1]);
 
+    printf("pthread exit");
 
     pthread_attr_destroy(&attr);
-    pthread_exit(NULL);
+    //pthread_exit(NULL);
+    return 1;
 }
 
 float Ranf( float low, float high ) {
     float r = (float) rand();		// 0 - RAND_MAX
-
     return(   low  +  r * ( high - low ) / (float)RAND_MAX   );
 }
 
 int Ranf( int ilow, int ihigh ) {
     float low = (float)ilow;
     float high = (float)ihigh + 0.9999f;
-
     return (int)(  Ranf(low,high) );
 }
 
